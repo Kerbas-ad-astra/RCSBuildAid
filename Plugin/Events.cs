@@ -1,4 +1,4 @@
-/* Copyright © 2013-2015, Elián Hanisch <lambdae2@gmail.com>
+/* Copyright © 2013-2016, Elián Hanisch <lambdae2@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -15,18 +15,21 @@
  */
 
 using System;
+using UnityEngine;
 
 namespace RCSBuildAid
 {
     public class Events
     {
-        public event Action<PluginMode> ModeChanged;
-        public event Action<Direction> DirectionChanged;
+        public event Action<PluginMode> ModeChanged; // TODO make static
+        public event Action<Direction> DirectionChanged; // TODO make static
         public static event Action ConfigSaving;
-        public static event Action PluginEnabled;
-        public static event Action PluginDisabled;
+        public static event Action<bool> PluginEnabled;
+        public static event Action<bool> PluginDisabled;
         public static event Action LeavingEditor;
         public static event Action PartChanged;
+        public static event Action RootPartPicked;
+        public static event Action RootPartDropped;
         public static event Action<EditorScreen> EditorScreenChanged;
 
         public void OnModeChanged ()
@@ -43,17 +46,17 @@ namespace RCSBuildAid
             }
         }
 
-        public void OnPluginEnabled ()
+        public void OnPluginEnabled (bool byUser)
         {
             if (PluginEnabled != null) {
-                PluginEnabled ();
+                PluginEnabled (byUser);
             }
         }
 
-        public void OnPluginDisabled ()
+        public void OnPluginDisabled (bool byUser)
         {
             if (PluginDisabled != null) {
-                PluginDisabled ();
+                PluginDisabled (byUser);
             }
         }
 
@@ -68,6 +71,20 @@ namespace RCSBuildAid
         {
             if (PartChanged != null) {
                 PartChanged ();
+            }
+        }
+
+        public void OnRootPartPicked ()
+        {
+            if (RootPartPicked != null) {
+                RootPartPicked ();
+            }
+        }
+
+        public void OnRootPartDropped ()
+        {
+            if (RootPartDropped != null) {
+                RootPartDropped ();
             }
         }
 
@@ -114,8 +131,19 @@ namespace RCSBuildAid
 
         void onEditorPartEvent (ConstructionEventType evt, Part part)
         {
+            //MonoBehaviour.print (evt.ToString ());
             OnPartChanged ();
             switch (evt) {
+            case ConstructionEventType.PartPicked:
+                if (part == EditorLogic.RootPart) {
+                    OnRootPartPicked ();
+                }
+                break;
+            case ConstructionEventType.PartDropped:
+                if (part == EditorLogic.RootPart) {
+                    OnRootPartDropped ();
+                }
+                break;
             case ConstructionEventType.PartDeleted:
                 if (part == EditorLogic.RootPart) {
                     RCSBuildAid.SetActive (false);

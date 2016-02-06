@@ -1,4 +1,4 @@
-/* Copyright © 2013-2015, Elián Hanisch <lambdae2@gmail.com>
+/* Copyright © 2013-2016, Elián Hanisch <lambdae2@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -15,13 +15,14 @@
  */
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace RCSBuildAid
 {
     public enum MarkerType { CoM, DCoM, ACoM };
-    public enum PluginMode { none, RCS, Attitude, Engine };
+    public enum PluginMode { none, RCS, Attitude, Engine, Parachutes };
     public enum Direction { none, right, left, up, down, forward, back };
 
     [KSPAddon(KSPAddon.Startup.EditorAny, false)]
@@ -39,10 +40,11 @@ namespace RCSBuildAid
             new Dictionary<MarkerType, GameObject> ();
         static List<PartModule> rcsList;
         static List<PartModule> engineList;
+        static List<PartModule> chutesList;
 
         EditorVesselOverlays vesselOverlays;
         bool disableShortcuts;
-        bool softEnable = true;
+        bool softEnable = true; /* for disabling temporally the plugin */
 
         /* Properties */
 
@@ -50,6 +52,7 @@ namespace RCSBuildAid
         public static GameObject CoM { get; private set; }
         public static GameObject DCoM { get; private set; }
         public static GameObject ACoM { get; private set; }
+        public static GameObject CoD { get; private set; }
 
         /* NOTE directions are reversed because they're the direction of the exhaust and not movement */
         public static Vector3 TranslationVector {
@@ -122,6 +125,10 @@ namespace RCSBuildAid
             private set { Settings.plugin_mode = value; }
         }
 
+        public static bool IncludeRCS {
+            get { return Settings.eng_include_rcs; }
+        }
+
         public static GameObject ReferenceMarker {
             get { return GetMarker (ReferenceType); }
         }
@@ -140,7 +147,16 @@ namespace RCSBuildAid
                 if (EditorLogic.fetch == null) {
                     return false;
                 }
-                return CheckEnabledConditions() && userEnable && (instance != null && instance.softEnable);
+
+                switch (HighLogic.LoadedScene) {
+                case GameScenes.EDITOR:
+                    break;
+                default:
+                    /* disable during scene changes */
+                    return false;
+                }
+
+                return userEnable && (instance != null && instance.softEnable);
             }
         }
 
@@ -152,28 +168,11 @@ namespace RCSBuildAid
             get { return engineList; }
         }
 
-        /* Methods */
-
-        [Obsolete]
-        public static bool CheckEnabledConditions ()
-        {
-            switch (HighLogic.LoadedScene) {
-            case GameScenes.EDITOR:
-                break;
-            default:
-                /* disable during scene changes */
-                return false;
-            }
-
-            /* the plugin isn't useful in all the editor screens */
-            if (EditorLogic.fetch.editorScreen == EditorScreen.Parts) {
-                return true;
-            } 
-            if (Settings.action_screen && (EditorLogic.fetch.editorScreen == EditorScreen.Actions)) {
-                return true;
-            }
-            return false;
+        public static List<PartModule> Parachutes {
+            get { return chutesList; }
         }
+
+        /* Methods */
 
         public static void SetReferenceMarker (MarkerType comref)
         {
@@ -193,7 +192,7 @@ namespace RCSBuildAid
             if (value) {
                 markerVis.Show ();
             } else {
-                markerVis.RCSBAToggle = false;
+                markerVis.SettingsToggle = false;
             }
             switch (marker) {
             case MarkerType.CoM:
@@ -217,6 +216,7 @@ namespace RCSBuildAid
                 /* for guesssing which mode to enable when using shortcuts (if needed) */
                 previousMode = Mode;
                 break;
+            case PluginMode.Parachutes:
             case PluginMode.none:
                 break;
             default:
@@ -239,6 +239,13 @@ namespace RCSBuildAid
 
             Mode = new_mode;
             events.OnModeChanged();
+        }
+
+        public static void SetIncludeRCS (bool value) {
+            if (value != Settings.eng_include_rcs) {
+                Settings.eng_include_rcs = value;
+                events.OnModeChanged ();
+            }
         }
 
         public static void SetDirection (Direction new_direction)
@@ -266,9 +273,9 @@ namespace RCSBuildAid
             ACoM.SetActive (enabled);
 
             if (enabled) {
-                events.OnPluginEnabled ();
+                events.OnPluginEnabled (true);
             } else {
-                events.OnPluginDisabled ();
+                events.OnPluginDisabled (true);
             }
         }
 
@@ -281,9 +288,9 @@ namespace RCSBuildAid
             DCoM.SetActive (pluginEnabled);
             ACoM.SetActive (pluginEnabled);
             if (pluginEnabled) {
-                events.OnPluginEnabled ();
+                events.OnPluginEnabled (false);
             } else {
-                events.OnPluginDisabled ();
+                events.OnPluginDisabled (false);
             }
         }
         
@@ -346,12 +353,12 @@ namespace RCSBuildAid
 
         void comButtonClick ()
         {
-            bool markerEnabled = !CoM.activeInHierarchy;
+            bool markerEnabled = !CoM.activeInHierarchy; /* toggle com */
             if (userEnable) {
-                bool visible = !CoM.GetComponent<MarkerVisibility> ().CoMToggle;
-                CoM.GetComponent<MarkerVisibility> ().CoMToggle = visible;
-                DCoM.GetComponent<MarkerVisibility> ().CoMToggle = visible;
-                ACoM.GetComponent<MarkerVisibility> ().CoMToggle = visible;
+                bool visible = !CoM.GetComponent<MarkerVisibility> ().GeneralToggle;
+                CoM.GetComponent<MarkerVisibility> ().GeneralToggle = visible;
+                DCoM.GetComponent<MarkerVisibility> ().GeneralToggle = visible;
+                ACoM.GetComponent<MarkerVisibility> ().GeneralToggle = visible;
                 /* we need the CoM to remain active, but we can't stop the editor from
                  * deactivating it when the CoM toggle button is used, so we toggle it now so is
                  * toggled again by the editor. That way it will remain active. */
@@ -393,6 +400,9 @@ namespace RCSBuildAid
             ACoM = (GameObject)UnityEngine.Object.Instantiate(DCoM);
             ACoM.name = "ACoM Marker";
 
+            /* init CoD */
+            CoD = (GameObject)UnityEngine.Object.Instantiate(DCoM);
+
             referenceDict[MarkerType.CoM] = CoM;
             referenceDict[MarkerType.DCoM] = DCoM;
             referenceDict[MarkerType.ACoM] = ACoM;
@@ -412,6 +422,11 @@ namespace RCSBuildAid
             acomMarker.posMarkerObject = ACoM;
             acomMarker.CoM1 = comMarker;
             acomMarker.CoM2 = dcomMarker;
+
+            /* setup CoD */
+            var codMarker = CoD.AddComponent<CoDMarker> ();
+            codMarker.posMarkerObject = CoD;
+            CoD.SetActive(false);
 
             var obj = new GameObject("Vessel Forces Object");
             obj.layer = CoM.layer;
@@ -434,8 +449,18 @@ namespace RCSBuildAid
             }
 
             if (Enabled) {
+                bool b = (Mode == PluginMode.Parachutes);
+                if (CoD.activeInHierarchy != b) {
+                    CoD.SetActive(b);
+                }
+            } else if (CoD.activeInHierarchy) {
+                CoD.SetActive(false);
+            }
+
+            if (Enabled) {
                 updateModuleLists ();
                 addForces ();
+                //EditorUtils.RunOnAllParts (addDragVectors);
 
                 /* find the bottommost stage with engines */
                 int stage = 0;
@@ -468,6 +493,7 @@ namespace RCSBuildAid
         void updateModuleLists ()
         {
             rcsList = EditorUtils.GetModulesOf<ModuleRCS> ();
+            chutesList = EditorUtils.GetModulesOf<ModuleParachute> ();
             engineList.Clear ();
 
             var tempEngineList = EditorUtils.GetModulesOf<ModuleEngines> ();
@@ -487,6 +513,14 @@ namespace RCSBuildAid
                 }
             }
             engineList.AddRange(multiModeList);
+        }
+
+        void addDragVectors(Part part) {
+            var dragVector = part.GetComponent<DragCubeVector> ();
+            if (dragVector == null) {
+                dragVector = part.gameObject.AddComponent<DragCubeVector> ();
+                dragVector.part = part;
+            }
         }
 
         void addForces ()

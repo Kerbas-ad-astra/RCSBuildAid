@@ -1,4 +1,4 @@
-/* Copyright © 2013-2015, Elián Hanisch <lambdae2@gmail.com>
+/* Copyright © 2013-2016, Elián Hanisch <lambdae2@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -22,7 +22,7 @@ namespace RCSBuildAid
 {
     public abstract class ModuleForces : MonoBehaviour
     {
-        public VectorGraphic[] vectors = new VectorGraphic[0];
+        public VectorGraphic[] vectors = new VectorGraphic[0]; // need a valid ref for avoid NRE
 
         protected Color color = Color.cyan;
 
@@ -47,6 +47,14 @@ namespace RCSBuildAid
             Events.PluginEnabled -= onPluginEnabled;
             Events.PartChanged -= onPartChanged;
             RCSBuildAid.events.ModeChanged -= onModeChanged;
+
+            /* remove vectors */
+            for (int i = 0; i < vectors.Length; i++) {
+                if (vectors [i] != null) {
+                    Destroy (vectors [i].gameObject);
+                }
+            }
+            vectors = new VectorGraphic[0];
         }
 
         void onLeavingEditor ()
@@ -54,12 +62,12 @@ namespace RCSBuildAid
             Disable ();
         }
 
-        void onPluginDisabled()
+        void onPluginDisabled(bool byUser)
         {
             Disable ();
         }
 
-        void onPluginEnabled()
+        void onPluginEnabled(bool byUser)
         {
             stateChanged ();
         }
@@ -87,17 +95,11 @@ namespace RCSBuildAid
         {
             /* thrusterTransforms aren't initialized while in Awake, so in Start instead */
             GameObject obj;
-            if (vectors.Length > 0) {
-                /* clonned by symmetry, do nothing */
-                return;
-            }
             int n = thrustTransforms.Count;
             vectors = new VectorGraphic[n];
             for (int i = 0; i < n; i++) {
                 obj = new GameObject ("PartModule Vector object");
                 obj.layer = gameObject.layer;
-                obj.transform.parent = transform;
-                obj.transform.position = thrustTransforms [i].position;
                 vectors [i] = obj.AddComponent<VectorGraphic> ();
                 vectors [i].setColor(color);
             }
@@ -106,6 +108,15 @@ namespace RCSBuildAid
 
         protected virtual void Update ()
         {
+        }
+
+        protected virtual void LateUpdate ()
+        {
+            /* we update forces positions in LateUpdate instead of parenting them to the part
+             * for prevent CoM position to be out of sync */
+            for (int i = 0; i < thrustTransforms.Count; i++) {
+                vectors [i].transform.position = thrustTransforms [i].position;
+            }
         }
 
         public void Enable ()
@@ -146,7 +157,7 @@ namespace RCSBuildAid
             case PluginMode.Attitude:
                 return true;
             case PluginMode.Engine:
-                return Settings.eng_include_rcs;
+                return RCSBuildAid.IncludeRCS;
             }
             return false;
         }
@@ -180,6 +191,24 @@ namespace RCSBuildAid
             }
         }
 
+        protected virtual float maxThrust {
+            get { return module.thrusterPower; }
+        }
+
+        protected virtual float minThrust {
+            get { return 0; }
+        }
+
+        protected virtual float vacIsp {
+            get { return module.atmosphereCurve.Evaluate(0); }
+        }
+
+        protected virtual float getThrust ()
+        {
+            float p = module.thrustPercentage / 100;
+            return Mathf.Lerp (minThrust, maxThrust, p);
+        }
+
         protected override void Update ()
         {
             base.Update ();
@@ -208,7 +237,7 @@ namespace RCSBuildAid
                 }
                 thrustDirection = thrusterTransform.up;
                 magnitude = Mathf.Max (Vector3.Dot (thrustDirection, directionVector), 0f);
-                magnitude = Mathf.Clamp (magnitude, 0f, 1f) * module.thrusterPower;
+                magnitude = Mathf.Clamp (magnitude, 0f, 1f) * getThrust();
                 Vector3 vectorThrust = thrustDirection * magnitude;
 
                 /* update VectorGraphic */
@@ -336,42 +365,6 @@ namespace RCSBuildAid
                     vectors [i].value = Vector3.zero;
                 }
             }
-        }
-    }
-
-    [Obsolete("ModuleEnginesFX is now a subclass of ModuleEngines, so it shouldn't be needed... in theory.")]
-    public class EnginesFXForce : EngineForce
-    {
-        ModuleEnginesFX module;
-
-        protected override void Init ()
-        {
-            module = GetComponent<ModuleEnginesFX> ();
-            if (module == null) {
-                throw new Exception ("Missing ModuleEnginesFX component.");
-            }
-            GimbalRotation.addTo (gameObject);
-        }
-        /* need to override anything that uses module due to being of a different type */
-        protected override bool connectedToVessel {
-            get { return RCSBuildAid.Engines.Contains (module); }
-        }
-
-        protected override List<Transform> thrustTransforms {
-            get { return module.thrustTransforms; }
-        }
-
-        protected override Part Part {
-            get { return module.part; }
-        }
-
-        protected override float getThrust ()
-        {
-            float maxThrust = module.maxThrust / thrustTransforms.Count;
-            float minThrust = module.minThrust / thrustTransforms.Count;
-            float p = module.thrustPercentage / 100;
-            float thrust = (maxThrust - minThrust) * p + minThrust;
-            return thrust;
         }
     }
 

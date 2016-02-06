@@ -1,4 +1,4 @@
-/* Copyright © 2013-2015, Elián Hanisch <lambdae2@gmail.com>
+/* Copyright © 2013-2016, Elián Hanisch <lambdae2@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -40,25 +40,43 @@ namespace RCSBuildAid
 
     public class MarkerVisibility : MonoBehaviour
     {
-        public bool CoMToggle = true;   /* for editor's CoM toggle button */
-        public bool RCSBAToggle = true; /* for RCSBA's visibility settings */
+        public bool GeneralToggle = true;   /* for editor's CoM toggle button */
+        public bool SettingsToggle = true; /* for RCSBA's visibility settings */
+
+        void Awake ()
+        {
+            Events.PluginDisabled += onPluginDisable;
+            Events.PluginEnabled += onPluginEnable;
+        }
+
+        void OnDestroy ()
+        {
+            Events.PluginDisabled -= onPluginDisable;
+            Events.PluginEnabled -= onPluginEnable;
+        }
 
         void LateUpdate ()
         {
-            if (RCSBuildAid.CheckEnabledConditions()) {
-                gameObject.renderer.enabled = isVisible;
-            } else {
-                gameObject.renderer.enabled = false;
-            }
+            gameObject.renderer.enabled = isVisible;
+        }
+
+        void onPluginDisable(bool byUser)
+        {
+            GeneralToggle = false;
+        }
+
+        void onPluginEnable(bool byUser)
+        {
+            GeneralToggle = true;
         }
 
         public bool isVisible {
-            get { return CoMToggle && RCSBAToggle; }
+            get { return GeneralToggle && SettingsToggle; }
         }
 
         public void Show ()
         {
-            CoMToggle = true; RCSBAToggle = true;
+            GeneralToggle = true; SettingsToggle = true;
         }
     }
 
@@ -82,7 +100,7 @@ namespace RCSBuildAid
         protected virtual void Awake ()
         {
             scaler = gameObject.AddComponent<MarkerScaler> ();
-            gameObject.AddComponent<MarkerVisibility> ().RCSBAToggle = Settings.show_marker_com;
+            gameObject.AddComponent<MarkerVisibility> ().SettingsToggle = Settings.show_marker_com;
         }
 
         protected override Vector3 UpdatePosition ()
@@ -113,6 +131,12 @@ namespace RCSBuildAid
         public CoMMarker ()
         {
             instance = this;
+        }
+
+        protected override Vector3 UpdatePosition ()
+        {
+            CraftCoM = base.UpdatePosition ();
+            return CraftCoM;
         }
 
         protected override void calculateCoM (Part part)
@@ -178,7 +202,7 @@ namespace RCSBuildAid
             base.Awake();
             scaler.scale = 0.9f;
             renderer.material.color = Color.red;
-            gameObject.GetComponent<MarkerVisibility> ().RCSBAToggle = Settings.show_marker_dcom;
+            gameObject.GetComponent<MarkerVisibility> ().SettingsToggle = Settings.show_marker_dcom;
         }
 
         protected override Vector3 UpdatePosition ()
@@ -198,28 +222,18 @@ namespace RCSBuildAid
                 return;
             }
 
-            float m = part.mass;
-
             /* add resource mass */
             for (int i = 0; i < part.Resources.Count; i++) {
                 PartResource res = part.Resources [i];
                 if (!Resource.ContainsKey (res.info.name)) {
                     Resource [res.info.name] = new DCoMResource (res);
-                }
-                else {
+                } else {
                     Resource [res.info.name].amount += res.amount;
                 }
-                // Analysis disable once CompareOfFloatsByEqualityOperator
-                if (res.info.density == 0) {
-                    /* no point in toggling it off/on from the DCoM marker */
-                    continue;
-                }
-                if (Settings.GetResourceCfg (res.info.name, false) || !res.flowState) {
-                    /* if resource isn't in the cfg, is a likely a resource added by a mod
-                     * so default to false */
-                    m += (float)(res.amount * res.info.density);
-                }
             }
+
+            /* calculate DCoM */
+            float m = part.GetSelectedMass();
 
             vectorSum += com * m;
             totalMass += m;
@@ -236,7 +250,7 @@ namespace RCSBuildAid
             base.Awake();
             scaler.scale = 0.6f;
             renderer.material.color = XKCDColors.Orange;
-            gameObject.GetComponent<MarkerVisibility> ().RCSBAToggle = Settings.show_marker_acom;
+            gameObject.GetComponent<MarkerVisibility> ().SettingsToggle = Settings.show_marker_acom;
         }
 
         protected override Vector3 UpdatePosition ()
@@ -250,4 +264,5 @@ namespace RCSBuildAid
         {
         }
     }
+
 }

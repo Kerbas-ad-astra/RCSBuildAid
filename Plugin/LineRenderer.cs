@@ -1,4 +1,4 @@
-/* Copyright © 2013-2015, Elián Hanisch <lambdae2@gmail.com>
+/* Copyright © 2013-2016, Elián Hanisch <lambdae2@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -116,7 +116,7 @@ namespace RCSBuildAid
     public class ArrowBase : LineBase
     {
         /* magnitude limits for the graphical representation */
-        public float upperMagnitude = 2;
+        public float upperMagnitude = 4;
         public float lowerMagnitude = 0.01f;
 
         public Vector3 value = Vector3.zero;
@@ -283,8 +283,9 @@ namespace RCSBuildAid
                 if (value.magnitude > 0f) {
                     Vector3 lever = RCSBuildAid.ReferenceMarker.transform.position - transform.position;
                     float angle = Vector3.Angle(lever, value) * Mathf.Deg2Rad;
-                    debugLabel.text = String.Format ("force: {0:0.##}\nlever: {1:0.##}\nsin: {2:0.##}", 
-                                                     value.magnitude, lever.magnitude, Mathf.Sin (angle));
+//                    debugLabel.text = String.Format ("force: {0:0.##}\nlever: {1:0.##}\nsin: {2:0.##}", 
+//                                                     value.magnitude, lever.magnitude, Mathf.Sin (angle));
+                    debugLabel.text = string.Format(value.magnitude.ToString("0.##"));
                 } else {
                     debugLabel.text = String.Empty;
                 }
@@ -432,7 +433,6 @@ namespace RCSBuildAid
             for (int i = 0; i < 6; i++) {
                 lines.Add (newLine ());
             }
-            setWidth (0, 0.05f);
             foreach (var lineRenderer in lines) {
                 lineRenderer.useWorldSpace = false;
                 lineRenderer.SetVertexCount (2);
@@ -445,6 +445,12 @@ namespace RCSBuildAid
             lines[3].SetPosition (1, Vector3.right * -scale);
             lines[4].SetPosition (1, Vector3.up * scale);
             lines[5].SetPosition (1, Vector3.up * -scale);
+        }
+
+        protected override void LateUpdate ()
+        {
+            base.LateUpdate ();
+            setWidth (0, 0.05f * transform.localScale.magnitude);
         }
     }
 }

@@ -9,7 +9,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>RCSBuildAid</RootNamespace>
     <AssemblyName>RCSBuildAid</AssemblyName>
-    <ReleaseVersion>0.5</ReleaseVersion>
+    <ReleaseVersion>0.7</ReleaseVersion>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -67,10 +67,14 @@
     <Compile Include="GUI\MainWindow.cs" />
     <Compile Include="AppLauncher.cs" />
     <Compile Include="GUI\ModeContent.cs" />
+    <Compile Include="DragForce.cs" />
+    <Compile Include="GUI\MenuParachutes.cs" />
     <Compile Include="Events.cs" />
     <Compile Include="GimbalRotation.cs" />
     <Compile Include="EditorUtils.cs" />
     <Compile Include="CelestialBodyExtensions.cs" />
+    <Compile Include="CoDMarker.cs" />
+    <Compile Include="DragCubeVector.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="GUI\" />
